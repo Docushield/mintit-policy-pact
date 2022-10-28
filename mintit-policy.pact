@@ -1,6 +1,6 @@
 (namespace "free")
 
-(module mintit-policy GOVERNANCE
+(module mintit-policy-v3 GOVERNANCE
 
   (use kip.token-policy-v1 [token-info])
 
@@ -25,7 +25,7 @@
 
   (defcap GOVERNANCE 
     () 
-    (enforce-guard (read-keyset "mintit-admin"))
+    (enforce-keyset "free.mintit-admin-2")
   )
 
   (defconst EXC_MINTIT_ADMIN_ALREADY_EXISTS "EXC_MINTIT_ADMIN_ALREADY_EXISTS")
@@ -500,6 +500,28 @@
     (emit-event (INIT_NFT_COLLECTION_EVENT collection)))))
   )
 
+  (defun update-nft-collection-mint-price:bool (collection-name:string new-mint-price:decimal)
+    (with-capability (ADMIN_ACCESS)
+      (enforce (>= new-mint-price 0.0) EXC_INVALID_COLLECTION_MINT_PRICE)
+      (update nft-collection-table collection-name 
+        { 
+          'mint-price: new-mint-price
+        }
+      )
+    )
+  )
+  
+  (defun update-nft-collection-premint-price:bool (collection-name:string new-premint-price:decimal)
+    (with-capability (ADMIN_ACCESS)
+      (enforce (>= new-premint-price 0.0) EXC_INVALID_COLLECTION_MINT_PRICE)
+      (update nft-collection-table collection-name 
+        { 
+          'premint-price: new-premint-price
+        }
+      )
+    )
+  )
+
   (defun add-nft-tokens:bool (collection-name:string token-list:[string])
     (with-capability (ADMIN_ACCESS)
       (write-nft-collection-token-hashes collection-name token-list)
@@ -755,7 +777,7 @@
     (with-default-read nft-table (get-nft-key params-collection-name params-content-hash)
       { 'collection-name: ""
       , 'creator: ""
-      , 'content-hash: ""
+      , 'content-hash: params-content-hash
       , 'current-owner: ""
       , 'current-owner-guard: ""
       , 'mint-index: -1
@@ -862,7 +884,7 @@
           , 'mint-time: mint-time
           })
 
-        (datum-uri (kip.token-manifest.uri "pact:schema" "free.mintit-policy.nft-manifest-datum"))
+        (datum-uri (kip.token-manifest.uri "pact:schema" "free.mintit-policy-v3.nft-manifest-datum"))
         (manifest-datum (kip.token-manifest.create-datum datum-uri datum-object)) 
         (manifest-uri content-uri) 
         (nft-manifest (kip.token-manifest.create-manifest manifest-uri [manifest-datum]))
@@ -870,8 +892,9 @@
         (token-precision 0)
       )
 
-    (marmalade.ledger.create-token token-id token-precision nft-manifest mintit-policy)
+    (marmalade.ledger.create-token token-id token-precision nft-manifest mintit-policy-v3)
     (marmalade.ledger.create-account token-id current-owner current-owner-guard)
+    (install-capability (marmalade.ledger.MINT token-id current-owner 1.0))
     (marmalade.ledger.mint token-id current-owner current-owner-guard 1.0)))
   )
 
@@ -1248,7 +1271,7 @@
 
   (defun transfer-nft-collection:bool (collection-name:string)
     (with-capability (ADMIN_ACCESS)
-      (bind (free.mintit-policy.get-nft-collection collection-name) 
+      (bind (free.mintit-policy-v2.get-nft-collection collection-name) 
           { 'creator := creator
           , 'description := description
           , 'name := name
@@ -1270,7 +1293,7 @@
           }
         
         (let (
-          (starting-index (at 'mint-index (at 0 (sort ['mint-time] (free.mintit-policy.search-nfts-by-collection collection-name)))))
+          (starting-index (at 'mint-index (at 0 (sort ['mint-time] (free.mintit-policy-v2.search-nfts-by-collection collection-name)))))
         )
           (write nft-collection-table collection-name 
             { 'creator: creator
@@ -1302,8 +1325,8 @@
   (defun transfer-minted-token:bool (collection-name:string index:integer)
     (with-capability (ADMIN_ACCESS)
       (let* (
-          (content-hash (free.mintit-policy.get-nft-collection-token-hash collection-name index))
-          (nft (free.mintit-policy.read-nft-table collection-name content-hash))
+          (content-hash (free.mintit-policy-v2.get-nft-collection-token-hash collection-name index))
+          (nft (free.mintit-policy-v2.read-nft-table collection-name content-hash))
         )
         (write nft-table (get-nft-key collection-name content-hash) nft)
       )
