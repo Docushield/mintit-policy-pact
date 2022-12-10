@@ -1,6 +1,8 @@
 (namespace "free")
 
-(module mintit-policy-v3 GOVERNANCE
+(define-keyset "free.mintit-admin15" (read-keyset "mintit-admin15"))
+
+(module mintit-policy-staging-v9 GOVERNANCE
 
   (use kip.token-policy-v1 [token-info])
 
@@ -25,7 +27,7 @@
 
   (defcap GOVERNANCE 
     () 
-    (enforce-keyset "free.mintit-admin-2")
+    (enforce-keyset "free.mintit-admin15")
   )
 
   (defconst EXC_MINTIT_ADMIN_ALREADY_EXISTS "EXC_MINTIT_ADMIN_ALREADY_EXISTS")
@@ -53,7 +55,7 @@
       { 'guard: "" }
       { 'guard := current-guard }
       (enforce (= "" (format "{}" [current-guard])) EXC_MINTIT_ADMIN_ALREADY_EXISTS)
-      (enforce-guard (read-keyset "mintit-admin"))
+      (enforce-guard (read-keyset "mintit-admin15"))
       (enforce-guard guard)
       (insert governance-table "admin" { 'guard: guard }))
     true
@@ -172,6 +174,18 @@
     (handle-nfts-by-type 
       (select nft-table (where 'collection-name (= collection-name))))
   )
+
+ (defun count-nfts-by-owner-in-collection:integer
+     (collection-name:string current-owner:string)
+     (length 
+         (select nft-table 
+             (and? 
+                 (where 'collection-name (= collection-name))
+                 (where 'current-owner (= current-owner))
+             )
+         )
+     )
+ )
 
   (defun search-nfts-by-creator:[object{nft}]
     ( creator:string ; k:account 
@@ -884,7 +898,7 @@
           , 'mint-time: mint-time
           })
 
-        (datum-uri (kip.token-manifest.uri "pact:schema" "free.mintit-policy-v3.nft-manifest-datum"))
+        (datum-uri (kip.token-manifest.uri "pact:schema" "free.mintit-policy-staging-v9.nft-manifest-datum"))
         (manifest-datum (kip.token-manifest.create-datum datum-uri datum-object)) 
         (manifest-uri content-uri) 
         (nft-manifest (kip.token-manifest.create-manifest manifest-uri [manifest-datum]))
@@ -892,7 +906,7 @@
         (token-precision 0)
       )
 
-    (marmalade.ledger.create-token token-id token-precision nft-manifest mintit-policy-v3)
+    (marmalade.ledger.create-token token-id token-precision nft-manifest mintit-policy-staging-v9)
     (marmalade.ledger.create-account token-id current-owner current-owner-guard)
     (install-capability (marmalade.ledger.MINT token-id current-owner 1.0))
     (marmalade.ledger.mint token-id current-owner current-owner-guard 1.0)))
@@ -1352,4 +1366,14 @@
       )
     )  
   )
+)
+	(if (try false (read-msg "init"))
+  [
+    (create-table nft-collection-table)
+    (create-table nft-collection-token-hashes-table)
+    (create-table nft-table)
+    (create-table governance-table)
+    (create-table quotes-table)
+  ]
+  "Module upgraded"
 )
